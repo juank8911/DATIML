@@ -20,7 +20,28 @@ binance_api_url = os.getenv('BINANCE_API_URL')
 #     """
 
 
+async def get_account_balance():
+    """
+    """
+    url = f'{binance_api_url}/bina/balance'
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
 
+
+async def place_order(symbol, side, quantity, price):
+    """
+    """
+    url = f'{binance_api_url}/bina/plord'
+    data = {
+        'symbol': symbol,
+        'side': side,
+        'quantity': quantity,
+        'price': price
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data) as response:
+            return await response.json()
 async def receive_socket_data():
   uri = "ws://localhost:3000/start-socket"  # Replace with the WebSocket server address
   async with websockets.connect(uri) as websocket:
