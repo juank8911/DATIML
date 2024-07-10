@@ -1,27 +1,22 @@
-import json
-import requests
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
 import websocket
 import time
 import binance_api
+import asyncio
 
 class TradingBottPr:
     
     def __init__(self):
-        self.cndles = binance_api.get_candles
-    """A class representing a trading bot that predicts and executes trades on Binance."""
-    def load_historical_data(self, file_path):
-        """Load historical data from a JSON file."""
-        with open(file_path, 'r') as file:
-            data = json.load(file)
-        return data
+        # self.cndles = binance_api.get_candles
+        self.promising_tokens = []
+        
+
+    
 
     def select_promising_tokens(self, data):
         """Select promising tokens based on price fluctuation rules."""
         promising_tokens = []
-        candles = self.cndles()
+        candles = binance_api.get_candles()
         for symbol in data:
             name = symbol['symbol']['name']
             open_prices = [float(item['open']) for item in candles[name]]
@@ -42,11 +37,18 @@ class TradingBottPr:
                         break
         return promising_tokens
     
-    def monitor_webSocket(self, url):
+    async def monitor_webSocket(self):
         """Monitor a webSocket and analyze the received data."""
         websocket.enableTrace(True)
-        ws = websocket.WebSocketApp(url, on_message=self.on_message)
-        ws.run_forever()
+        ws = websocket.WebSocketApp("ws://localhost:3000/binance-stream",
+                                    on_message=self.on_message,
+                                    on_error=self.on_error,
+                                    on_close=self.on_close,
+                                    on_open=self.on_open)
+        
+        wst = asyncio.get_event_loop().run_in_executor(None, ws.run_forever)
+        print("WebSocket client iniciado")
+        await wst
 
     def on_message(self, ws, message):
         """Handle incoming messages from the webSocket."""
@@ -54,6 +56,15 @@ class TradingBottPr:
         for token in data:
             if token['s'] in self.promising_tokens:
                 self.analyze_token(token)
+
+    def on_error(self, ws, error):
+        print(f"Error: {error}")
+
+    def on_close(self, ws, close_status_code, close_msg):
+        print("Conexión cerrada")
+
+    def on_open(self, ws):
+        print("Conexión abierta")
 
     def analyze_token(self, token):
         """Analyze a token and predict a trade."""
