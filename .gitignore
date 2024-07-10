@@ -1,0 +1,21 @@
+# Archivos generados automáticamente
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Directorio del entorno virtual
+.venv/
+
+# Archivos de caché
+*.cache
+*.log
+
+# Archivos de configuración
+*.ini
+*.env
+
+# Otros archivos y directorios específicos de tu proyecto
+# Ejemplo: archivos de resultados, archivos de datos, etc.
+/results/
+/data/
