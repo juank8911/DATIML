@@ -1,7 +1,7 @@
 import unittest
 import sys
 sys.path.append('J:\ProyectosCriptoMon\DATIML\binance_trading\binance_api.py')
-from binance_trading.tradingBottPr import TradingBottPr
+from binance_trading.TrainingBot import TradingBottPr
 
 class TestTradingBotPr(unittest.TestCase):
     def setUp(self):

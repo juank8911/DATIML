@@ -55,21 +55,26 @@ async def get_candles():
         symbol_info["candles"] = candles
         symbols.append(symbol_info)
     return symbols
-    
+  
+async def getAllOrders():
+    url = f"{binance_api_url}/bina/allop"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            data = await response.json()
+    return data
 
-async def abrir_operacion_futuros_apalancada(exchange, simbolo, apalancamiento, cantidad,lado, tipo_orden="mercado" ):
-  """
-  Esta función abre una operación de futuros apalancada (corta o larga) en el exchange especificado.
 
-  Args:
-      exchange (ccxt.Exchange): Instancia del exchange CCXT configurada con sus credenciales.
-      simbolo (str): Símbolo del contrato de futuros (ej.: BTC/USDT).
-      apalancamiento (int): Nivel de apalancamiento deseado.
-      cantidad (float): Cantidad del activo subyacente a operar (considerando el apalancamiento).
-      tipo_orden (str, opcional): Tipo de orden ("mercado" o "limite"). Predeterminado a "mercado".
-      lado (str, opcional): Dirección de la operación ("corto" o "largo"). Predeterminado a "corto".
-
-  Returns:
-      dict: Diccionario con la información de la orden creada.
-  """
+async def operar(tokens):
+  tokens = tokens
+  batch_orders = []
+  for token in tokens:
+    batch_orders.append({
+      'symbol': token['s'],
+      'side': 'SELL' if token['side'] == 'BUy' else 'BUY',
+      'type': 'LIMIT',
+      'quantity': 1,
+      'price': token['p']
+      })
+  response = requests.post('http://localhost:3000/bina/open', json=batch_orders)
+  print(response.json())
   

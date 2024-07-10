@@ -1,9 +1,11 @@
 from flask import Flask, jsonify
 import asyncio
 from binance_trading.binanceSocket import start_websocket_client
-from binance_trading.binance_api import get_candles,get_exchange_info
+from binance_trading.binance_api import get_candles
+from binance_trading.trading_strategy import TradingStrategy
 
 app = Flask(__name__)
+trading_strategy = TradingStrategy()
 
 @app.route('/')
 def index():
@@ -17,27 +19,14 @@ def start_websocket():
 
 @app.route('/velas')
 async def get_historical_futures_klines_api():
-    async def get_historical_futures_klines_api():
-        # symbols = await get_exchange_info()
-        # print(symbols)
-        klines = await get_candles()
-        return jsonify(klines)
-    return "Función para obtener velas"
+    klines = await get_candles()
+    return jsonify(klines)
+
+@app.route('/process_data', methods=['POST'])
+def process_data():
+    data = request.json
+    trading_strategy.process_real_time_data(data)
+    return "Datos procesados"
 
 if __name__ == "__main__":
     app.run(port=3030)
-
-# @app.route('/')
-# def index():
-#     asyncio.get_event_loop().run_until_complete(receive_socket_data())
-#     return "API corrida satisfactoriamente"
-    
-
-
-# @app.route('/velas')
-# async def get_historical_futures_klines_api():
-#     asyncio.get_event_loop().run_until_complete(receive_socket_data())
-# #     symbols = await get_exchange_info()
-# #     print(symbols)
-# #     klines = await get_candles(symbols)
-# #     return jsonify(klines)

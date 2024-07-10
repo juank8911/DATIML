@@ -1,117 +1,178 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from binance_api import get_3h_candles, open_long_trade,get_candles
-from tradingBottPr import TradingBottPr
+import asyncio
+from .TrainingBot import TrainingBot
+import joblib
+from binance_api import place_order, get_account_balance
+
+class TradingStrategy:
+    """
+    Clase para implementar la estrategia de trading en tiempo real.
+    """
+
+    def __init__(self):
+        self.open_positions = {}
+        self.model = joblib.load("model.pkl")
+        self.bot = TrainingBot
+
+    def process_real_time_data(self, data):
+        """
+        Procesa los datos en tiempo real y toma decisiones de trading.
+
+        Args:
+            data (dict): Datos en tiempo real del símbolo.
+        """
+        symbol = data['s']
+        current_price = float(data['c'])
+        
+        prediction = self.predict_trades(data)[-1]
+        
+        if symbol not in self.open_positions:
+            if prediction == 1 and self.should_open_long(symbol, current_price):
+                self.open_long_position(symbol, current_price)
+            elif prediction == 0 and self.should_open_short(symbol, current_price):
+                self.open_short_position(symbol, current_price)
+        else:
+            if self.should_close_position(symbol, current_price):
+                self.close_position(symbol, current_price)
+
+    def predict_trades(self, data):
+        """
+        Utiliza el modelo para predecir operaciones.
+
+        Args:
+            data (dict): Datos del símbolo para realizar la predicción.
+
+        Returns:
+            np.array: Array de predicciones (0 o 1 para cada punto de datos).
+        """
+        return self.bot.predict_trades(data)
+
+    def should_open_long(self, symbol, current_price):
+        """
+        Determina si se debe abrir una posición larga.
+
+        Args:
+            symbol (str): Símbolo del par de trading.
+            current_price (float): Precio actual del símbolo.
+
+        Returns:
+            bool: True si se debe abrir una posición larga, False en caso contrario.
+        """
+        # Implementa tu lógica aquí, por ejemplo:
+        return self.bot.analyzed_data[symbol]['trend'] == 'alcista' and \
+               self.bot.analyzed_data[symbol]['upward_count'] > 15
+
+    def should_open_short(self, symbol, current_price):
+        """
+        Determina si se debe abrir una posición corta.
+
+        Args:
+            symbol (str): Símbolo del par de trading.
+            current_price (float): Precio actual del símbolo.
+
+        Returns:
+            bool: True si se debe abrir una posición corta, False en caso contrario.
+        """
+        # Implementa tu lógica aquí, por ejemplo:
+        return self.bot.analyzed_data[symbol]['trend'] == 'bajista' and \
+               self.bot.analyzed_data[symbol]['downward_count'] > 15
+
+    def should_close_position(self, symbol, current_price):
+        """
+        Determina si se debe cerrar una posición.
+
+        Args:
+            symbol (str): Símbolo del par de trading.
+            current_price (float): Precio actual del símbolo.
+
+        Returns:
+            bool: True si se debe cerrar la posición, False en caso contrario.
+        """
+        position = self.open_positions[symbol]
+        if position['type'] == 'long':
+            return current_price <= position['price'] * 0.98 or current_price >= position['price'] * 1.02
+        else:
+            return current_price >= position['price'] * 1.02 or current_price <= position['price'] * 0.98
+
+    async def open_long_position(self, symbol, price):
+        """
+        Abre una posición larga.
+
+        Args:
+            symbol (str): Símbolo del par de trading.
+            price (float): Precio de apertura de la posición.
+        """
+        print(f"Abriendo posición larga para {symbol} a {price}")
+        self.open_positions[symbol] = {'type': 'long', 'price': price}
+        
+        # Obtener el balance de la cuenta
+        balance = await get_account_balance()
+        
+        # Calcular la cantidad a comprar (por ejemplo, el 1% del balance)
+        quantity = (balance * 0.01) / price
+        
+        # Colocar la orden
+        order = await place_order(symbol, 'BUY', quantity, price)
+        print(f"Orden colocada: {order}")
+
+    async def open_short_position(self, symbol, price):
+        """
+        Abre una posición corta.
+
+        Args:
+            symbol (str): Símbolo del par de trading.
+            price (float): Precio de apertura de la posición.
+        """
+        print(f"Abriendo posición corta para {symbol} a {price}")
+        self.open_positions[symbol] = {'type': 'short', 'price': price}
+        
+        # Obtener el balance de la cuenta
+        balance = await get_account_balance()
+        
+        # Calcular la cantidad a vender (por ejemplo, el 1% del balance)
+        quantity = (balance * 0.01) / price
+        
+        # Colocar la orden
+        order = await place_order(symbol, 'SELL', quantity, price)
+        print(f"Orden colocada: {order}")
+
+    async def close_position(self, symbol, price):
+        """
+        Cierra una posición existente.
+
+        Args:
+            symbol (str): Símbolo del par de trading.
+            price (float): Precio de cierre de la posición.
+        """
+        position = self.open_positions.pop(symbol)
+        print(f"Cerrando posición {position['type']} para {symbol} a {price}")
+        
+        # Obtener la cantidad de la posición abierta
+        quantity = position['quantity']
+        
+        # Colocar la orden de cierre
+        order_type = 'SELL' if position['type'] == 'long' else 'BUY'
+        order = await place_order(symbol, order_type, quantity, price)
+        print(f"Orden de cierre colocada: {order}")
 
 def train_model():
-    # Obtén los datos históricos de todos los tokens que sean futuros
-    historical_data = get_candles()
-    
-    # Procesa los datos y obtiene características relevantes de todos los tokens
-    all_tokens_data = pd.DataFrame(historical_data)
-    
-    # Divide los datos en entrenamiento y prueba
-    X_train, X_test, y_train, y_test = train_test_split(all_tokens_data.drop("target_column", axis=1), all_tokens_data["target_column"], test_size=0.2)
-    
-    # Crea una instancia de la clase TradingBottPr
-    tb = TradingBottPr()
-    
-    # Entrena el modelo utilizando la clase TradingBottPr
-    tb.train(X_train, y_train)
-    
-    # Guarda el modelo entrenado
-    tb.save_model("model.pkl")
-
-def predict_trades(data):
-    # Utiliza el modelo para predecir operaciones
-    predictions = tb.predict(data)
-    return predictions
-
-import websockets
-
-def trading_strategy_ml(symbol, interval, start_time):
     """
-    Implementa tu estrategia de trading con machine learning.
+    Entrena el modelo de machine learning.
+    """
+    bot = TrainingBot()
+    asyncio.run(bot.get_candles())
+    bot.analyze_fluctuations()
+    bot.train_model()
+
+def evaluate_model(test_data):
+    """
+    Evalúa el modelo con datos de prueba.
+
     Args:
-        symbol (str): Símbolo de las velas.
-        interval (str): Intervalo de las velas.
-        start_time (int): Fecha de inicio en formato UNIX.
-    Returns:
-        None
-    """
-    # Obtén los datos históricos de las velas
-    historical_data = get_candles(symbol, interval, start_time)
-    
-    # Procesar los datos y obtener características relevantes
-    df = pd.DataFrame(historical_data)
-    
-    # Utilizar el modelo de machine learning para predecir operaciones
-    trades = predict_trades(df)
-    
-    # Monitorear el websocket para determinar el momento de abrir o cerrar operaciones
-    async def monitor_websocket():
-        async with websockets.connect('wss://stream.binance.com:9443/ws/'+symbol+'@kline_'+interval) as websocket:
-            while True:
-                kline = await websocket.recv()
-                kline_data = json.loads(kline)
-                
-                if kline_data['k']['x'] == 'kline':
-                    if kline_data['k']['s'] == symbol and kline_data['k']['i'] == interval:
-                        if kline_data['k']['c'] == trades[0]:
-                            open_long_trade(symbol)
-                            trades.pop(0)
-                        elif kline_data['k']['c'] == trades[0]:
-                            open_short_trade(symbol)
-                            trades.pop(0)
-                        
-    asyncio.run(monitor_websocket())
-    
-    
-# Función para evaluar el modelo
-def evaluate_model(model, test_data):
-    # Lógica para evaluar el modelo con datos de prueba
-    print("Evaluando el modelo...")
-    
-    # Inicializar variables para contear ganancias
-    total_ganancia = 0
-    num_operaciones = 0
-    
-    # Recorrer los datos de prueba
-    for i in range(1, len(test_data)):
-        # Obtener la predicción del modelo para el dato actual
-        prediction = model.predict(test_data.iloc[[i]])[0]
-        
-        # Obtener el valor actual de la criptomoneda
-        actual_value = test_data.loc[i, 'close']
-        
-        # Comprobar si la predicción indica una operación larga o corta
-        if prediction > actual_value:
-            # Abrir una operación larga
-            open_long_trade(test_data.loc[i, 'symbol'])
-            num_operaciones += 1
-        elif prediction < actual_value:
-            # Abrir una operación corta
-            open_short_trade(test_data.loc[i, 'symbol'])
-            num_operaciones += 1
-        else:
-            # No hay operación
-            pass
-        
-        # Comprobar si la operación ha sido cerrada
-        if test_data.loc[i, 'close'] > test_data.loc[i-1, 'close'] * 1.005 or test_data.loc[i, 'close'] < test_data.loc[i-1, 'close'] * 0.995:
-            # Cerrar la operación
-            close_trade(test_data.loc[i, 'symbol'])
-            total_ganancia += test_data.loc[i, 'close'] - test_data.loc[i-1, 'close']
-        
-    # Calcular la ganancia promedio
-    if num_operaciones == 0:
-        ganancia_promedio = 0
-    else:
-        ganancia_promedio = total_ganancia / num_operaciones
-    
-    # Imprimir los resultados de la evaluación
-    print(f"Ganancia promedio: {ganancia_promedio:.2f}%")
+        test_data (dict): Datos de prueba para evaluar el modelo.
 
-# Carga el modelo entrenado
-tb = TradingBottPr()
-tb.load_model("model.pkl")
+    Returns:
+        dict: Métricas de evaluación del modelo.
+    """
+    bot = TrainingBot()
+    bot.load_model("model.pkl")
+    return bot.evaluate_model(test_data)
